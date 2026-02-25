@@ -9,6 +9,20 @@ Deployable runner service for the Prophet follow-up workflow.
 - Drafts or sends via Gmail API
 - Writes outcomes to `Email Log`
 
+## Required repo layout
+
+This service expects `prophet-core` to exist either:
+
+- as a submodule at `./prophet-core` (recommended for Railway), or
+- as a sibling folder `../prophet-core` (local dev fallback).
+
+Recommended setup:
+
+```bash
+git submodule add git@github.com:jude-leonard/prophet-core.git prophet-core
+git submodule update --init --recursive
+```
+
 ## Setup
 
 1. Copy env file:
@@ -55,6 +69,7 @@ Service account must have domain-wide delegation and Gmail + Sheets scopes appro
 ## Deploy to Railway
 
 - Connect GitHub repo `prophet-automation`
+- Ensure submodules are fetched during deploy (Railway setting or prebuild step)
 - Set all environment variables in Railway
 - Start command: `npm start`
 - Add a scheduled trigger to run `node src/index.js`

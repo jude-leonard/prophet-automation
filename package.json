@@ -15,7 +15,6 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "googleapis": "^154.1.0",
-    "prophet-core": "git+https://github.com/jude-leonard/prophet-core.git",
     "zod": "^3.24.1"
   },
   "devDependencies": {

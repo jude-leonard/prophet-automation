@@ -3,8 +3,9 @@ const path = require('path');
 
 function resolveCoreRoot() {
   const candidates = [
-    path.resolve(process.cwd(), 'node_modules', 'prophet-core'),
+    path.resolve(process.cwd(), 'prophet-core'),
     path.resolve(process.cwd(), '..', 'prophet-core'),
+    path.resolve(process.cwd(), 'node_modules', 'prophet-core'),
   ];
 
   for (const candidate of candidates) {
@@ -13,7 +14,7 @@ function resolveCoreRoot() {
     }
   }
 
-  throw new Error('Could not locate prophet-core. Install dependency or place repo beside prophet-automation.');
+  throw new Error('Could not locate prophet-core. Add it as a submodule at ./prophet-core or keep it beside prophet-automation.');
 }
 
 function readTemplate(templateKey = 'follow_up') {
