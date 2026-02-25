@@ -4,32 +4,96 @@ const { readSheetRows } = require('../lib/sheets');
 const { sendOrDraftEmail } = require('../lib/gmail');
 const { appendEmailLog } = require('../lib/log');
 
-const FollowUpRow = z.object({
-  row_number: z.number(),
-  email: z.string().optional(),
-  recipient_email: z.string().optional(),
-  to: z.string().optional(),
-  first_name: z.string().optional(),
-  last_name: z.string().optional(),
-  status: z.string().optional(),
-  template: z.string().optional(),
-  template_key: z.string().optional(),
-  subject: z.string().optional(),
-  run: z.string().optional(),
-  should_send: z.string().optional(),
-});
+const FollowUpRow = z
+  .object({
+    row_number: z.number(),
+    email: z.string().optional(),
+    recipient_email: z.string().optional(),
+    to: z.string().optional(),
+    first_name: z.string().optional(),
+    last_name: z.string().optional(),
+    status: z.string().optional(),
+    template: z.string().optional(),
+    template_key: z.string().optional(),
+    subject: z.string().optional(),
+    run: z.string().optional(),
+    should_send: z.string().optional(),
+  })
+  .passthrough();
+
+const RECIPIENT_KEYS = [
+  'email',
+  'recipient_email',
+  'to',
+  'email_address',
+  'client_email',
+  'lead_email',
+  'contact_email',
+  'agent_email',
+];
+
+const FIRST_NAME_KEYS = ['first_name', 'firstname', 'first', 'contact_first_name'];
+const LAST_NAME_KEYS = ['last_name', 'lastname', 'last', 'contact_last_name'];
+const GATE_KEYS = ['should_send', 'run', 'send', 'ready_to_send'];
+
+const ALLOWED_GATE_VALUES = new Set([
+  'yes',
+  'y',
+  'true',
+  '1',
+  'send',
+  'ready',
+  'go',
+  'approved',
+]);
+
+function str(value) {
+  return String(value || '').trim();
+}
+
+function isLikelyEmail(value) {
+  const v = str(value);
+  return !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function pickByKeys(row, keys) {
+  for (const key of keys) {
+    if (str(row[key])) {
+      return str(row[key]);
+    }
+  }
+  return '';
+}
 
 function pickRecipient(row) {
-  return (row.email || row.recipient_email || row.to || '').trim();
+  const direct = pickByKeys(row, RECIPIENT_KEYS);
+  if (isLikelyEmail(direct)) {
+    return direct;
+  }
+
+  for (const [key, value] of Object.entries(row)) {
+    if (typeof value !== 'string') {
+      continue;
+    }
+    if (!key.includes('email')) {
+      continue;
+    }
+    const candidate = str(value);
+    if (isLikelyEmail(candidate)) {
+      return candidate;
+    }
+  }
+
+  return '';
 }
 
 function shouldProcessRow(row) {
-  const gate = String(row.should_send || row.run || '').trim().toLowerCase();
-  if (!gate) {
+  const rawGate = pickByKeys(row, GATE_KEYS).toLowerCase();
+  if (!rawGate) {
     return true;
   }
 
-  return ['yes', 'y', 'true', '1', 'send'].includes(gate);
+  return ALLOWED_GATE_VALUES.has(rawGate);
 }
 
 function renderTemplate(content, vars) {
@@ -39,13 +103,52 @@ function renderTemplate(content, vars) {
   });
 }
 
-function buildSubject(row) {
+function buildSubject(row, firstName) {
   if (row.subject && row.subject.trim()) {
     return row.subject.trim();
   }
 
-  const first = (row.first_name || '').trim();
-  return first ? `Quick follow-up, ${first}` : 'Quick follow-up';
+  return firstName ? `Quick follow-up, ${firstName}` : 'Quick follow-up';
+}
+
+function errorMessage(error) {
+  if (!error) {
+    return 'unknown_error';
+  }
+
+  if (error.response && error.response.data && error.response.data.error) {
+    const data = error.response.data.error;
+    if (typeof data === 'string') {
+      return data;
+    }
+    if (data.message) {
+      return data.message;
+    }
+  }
+
+  if (error.message) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function logSkip(summary, reason, rowNumber) {
+  summary.skipped += 1;
+  summary.skipReasons[reason] = (summary.skipReasons[reason] || 0) + 1;
+
+  if (summary.skipSamples.length < 10) {
+    summary.skipSamples.push({ rowNumber, reason });
+  }
+}
+
+function logFailure(summary, rowNumber, message) {
+  summary.failed += 1;
+  summary.failReasons[message] = (summary.failReasons[message] || 0) + 1;
+
+  if (summary.failSamples.length < 10) {
+    summary.failSamples.push({ rowNumber, message });
+  }
 }
 
 async function sendFollowUps() {
@@ -70,33 +173,46 @@ async function sendFollowUps() {
     drafted: 0,
     skipped: 0,
     failed: 0,
+    skipReasons: {},
+    skipSamples: [],
+    failReasons: {},
+    failSamples: [],
   };
 
   for (const rawRow of rows) {
     const parsed = FollowUpRow.safeParse(rawRow);
     if (!parsed.success) {
-      summary.skipped += 1;
+      logSkip(summary, 'invalid_row_shape', rawRow && rawRow.row_number ? rawRow.row_number : null);
       continue;
     }
 
     const row = parsed.data;
+    const rowNumber = row.row_number;
     const recipient = pickRecipient(row);
-    if (!recipient || !shouldProcessRow(row)) {
-      summary.skipped += 1;
+
+    if (!recipient) {
+      logSkip(summary, 'missing_recipient_email', rowNumber);
+      continue;
+    }
+
+    if (!shouldProcessRow(row)) {
+      logSkip(summary, 'gate_not_approved', rowNumber);
       continue;
     }
 
     summary.attempted += 1;
 
-    const templateKey = (row.template_key || row.template || 'follow_up').trim();
-    const subject = buildSubject(row);
+    const templateKey = str(row.template_key || row.template || 'follow_up');
+    const firstName = pickByKeys(row, FIRST_NAME_KEYS);
+    const lastName = pickByKeys(row, LAST_NAME_KEYS);
+    const subject = buildSubject(row, firstName);
 
     try {
       const template = readTemplate(templateKey);
       const body = renderTemplate(template, {
-        first_name: row.first_name || '',
-        last_name: row.last_name || '',
-        status: row.status || '',
+        first_name: firstName,
+        last_name: lastName,
+        status: str(row.status),
         email: recipient,
       });
 
@@ -116,7 +232,7 @@ async function sendFollowUps() {
       await appendEmailLog({
         spreadsheetId,
         tabName: emailLogTab,
-        rowNumber: row.row_number,
+        rowNumber,
         recipient,
         subject,
         templateKey,
@@ -124,17 +240,18 @@ async function sendFollowUps() {
         externalId: result.id,
       });
     } catch (error) {
-      summary.failed += 1;
+      const message = errorMessage(error);
+      logFailure(summary, rowNumber, message);
 
       await appendEmailLog({
         spreadsheetId,
         tabName: emailLogTab,
-        rowNumber: row.row_number,
+        rowNumber,
         recipient,
         subject,
         templateKey,
         outcome: 'failed',
-        error: error && error.message ? error.message : String(error),
+        error: message,
       });
     }
   }

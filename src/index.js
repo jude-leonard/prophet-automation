@@ -15,7 +15,17 @@ async function main() {
     drafted: result.drafted,
     skipped: result.skipped,
     failed: result.failed,
+    skipReasons: result.skipReasons,
+    failReasons: result.failReasons,
   });
+
+  if (result.skipSamples && result.skipSamples.length) {
+    console.log('[runner] skip samples', result.skipSamples);
+  }
+
+  if (result.failSamples && result.failSamples.length) {
+    console.log('[runner] fail samples', result.failSamples);
+  }
 }
 
 main().catch((error) => {

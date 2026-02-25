@@ -8,6 +8,7 @@ Deployable runner service for the Prophet follow-up workflow.
 - Loads email templates from `prophet-core`
 - Drafts or sends via Gmail API
 - Writes outcomes to `Email Log`
+- Prints skip diagnostics so sheet issues are easy to fix
 
 ## Required repo layout
 
@@ -57,32 +58,40 @@ npm run dev
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URI` (default already set)
+- `GOOGLE_OAUTH_REFRESH_TOKEN`
 - `GMAIL_FROM` (your sender Gmail)
 - `SHEET_ID`
 
-7. Generate refresh token:
-
-```bash
-npm run oauth:token
-```
-
-8. Paste the returned value into `.env` as:
-
-```bash
-GOOGLE_OAUTH_REFRESH_TOKEN=...
-```
-
-9. Set safe mode first:
-
-```bash
-DRY_RUN=true
-```
-
-10. Run:
+7. Run:
 
 ```bash
 npm start
 ```
+
+## Sheet column expectations
+
+Recipient column can be any of:
+
+- `email`
+- `recipient_email`
+- `to`
+- `email_address`
+- `client_email`
+- `lead_email`
+- any other column containing `email` with valid email values
+
+Optional gate columns (if present) can be any of:
+
+- `should_send`
+- `run`
+- `send`
+- `ready_to_send`
+
+Accepted gate values:
+
+- `yes`, `y`, `true`, `1`, `send`, `ready`, `go`, `approved`
+
+If no gate value is set, row is treated as sendable.
 
 ## Service account mode (optional)
 
