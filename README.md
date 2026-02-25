@@ -5,114 +5,68 @@ Deployable runner service for the Prophet follow-up workflow.
 ## What this service does
 
 - Reads follow-up rows from Google Sheets tab `Agent Follow Up`
-- Loads email templates from `prophet-core`
+- Loads email templates from local `templates/email` first
+- Falls back to `prophet-core` templates if available
 - Drafts or sends via Gmail API
 - Writes outcomes to `Email Log`
-- Prints skip diagnostics so sheet issues are easy to fix
+- Prints skip/fail diagnostics for fast troubleshooting
 
-## Required repo layout
+## Template source order
 
-This service expects `prophet-core` to exist either:
+1. Local templates in this repo: `templates/email/*.md` (recommended for deploy stability)
+2. `prophet-core` submodule/sibling if present
 
-- as a submodule at `./prophet-core` (recommended for Railway), or
-- as a sibling folder `../prophet-core` (local dev fallback).
+Default included template:
 
-Recommended setup:
+- `templates/email/follow_up.md`
+
+## Optional submodule setup
+
+If you want full template parity with `prophet-core`, add it as submodule:
 
 ```bash
-git submodule add git@github.com:jude-leonard/prophet-core.git prophet-core
+git submodule add https://github.com/jude-leonard/prophet-core.git prophet-core
 git submodule update --init --recursive
 ```
 
 ## Setup
 
-1. Copy env file:
-
 ```bash
 cp .env.example .env
-```
-
-2. Install dependencies:
-
-```bash
 npm install
-```
-
-3. Fill `.env` values.
-
-4. Run local dry run:
-
-```bash
-npm run dev
-```
-
-## Personal Gmail OAuth setup (recommended for you)
-
-1. In Google Cloud Console, create/select a project.
-2. Enable `Gmail API` and `Google Sheets API`.
-3. Configure OAuth consent screen (External is fine), add your Gmail as a test user.
-4. Create OAuth Client ID of type `Web application`.
-5. Add redirect URI: `http://localhost:3000/oauth2callback`.
-6. Put these in `.env`:
-
-- `GOOGLE_OAUTH_CLIENT_ID`
-- `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URI` (default already set)
-- `GOOGLE_OAUTH_REFRESH_TOKEN`
-- `GMAIL_FROM` (your sender Gmail)
-- `SHEET_ID`
-
-7. Run:
-
-```bash
+npm run oauth:token
 npm start
 ```
 
+## Required env vars (Personal Gmail OAuth)
+
+- `NODE_ENV=production`
+- `DRY_RUN=true|false`
+- `SHEET_ID`
+- `FOLLOW_UP_TAB` (default `Agent Follow Up`)
+- `EMAIL_LOG_TAB` (default `Email Log`)
+- `GMAIL_FROM`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/oauth2callback`
+- `GOOGLE_OAUTH_REFRESH_TOKEN`
+
 ## Sheet column expectations
 
-Recipient column can be any of:
+Recipient columns supported:
 
-- `email`
-- `recipient_email`
-- `to`
-- `email_address`
-- `client_email`
-- `lead_email`
-- any other column containing `email` with valid email values
+- `email`, `recipient_email`, `to`, `email_address`, `client_email`, `lead_email`
+- Any column containing `email` with valid email values
 
-Optional gate columns (if present) can be any of:
+Optional gate columns:
 
-- `should_send`
-- `run`
-- `send`
-- `ready_to_send`
+- `should_send`, `run`, `send`, `ready_to_send`
 
 Accepted gate values:
 
 - `yes`, `y`, `true`, `1`, `send`, `ready`, `go`, `approved`
 
-If no gate value is set, row is treated as sendable.
-
-## Service account mode (optional)
-
-Set these in `.env`:
-
-- `GOOGLE_SERVICE_ACCOUNT_JSON`
-- `GMAIL_IMPERSONATE_USER` (Workspace only)
-- `GMAIL_FROM`
-
-## Run modes
-
-- `DRY_RUN=true`: create Gmail drafts only
-- `DRY_RUN=false`: send real emails
-
-## Deploy to Railway
-
-- Connect GitHub repo `prophet-automation`
-- Ensure submodules are fetched during deploy (Railway setting or prebuild step)
-- Set all environment variables in Railway
-- Start command: `npm start`
-- Add a scheduled trigger to run `node src/index.js`
+If gate is blank, the row is treated as sendable.
 
 ## Log columns written to `Email Log`
 

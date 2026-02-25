@@ -14,24 +14,47 @@ function resolveCoreRoot() {
     }
   }
 
-  throw new Error('Could not locate prophet-core. Add it as a submodule at ./prophet-core or keep it beside prophet-automation.');
+  return null;
+}
+
+function readIfExists(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return fs.readFileSync(filePath, 'utf8');
 }
 
 function readTemplate(templateKey = 'follow_up') {
-  const normalized = String(templateKey || 'follow_up').trim().toLowerCase().replace(/\s+/g, '_');
+  const normalized = String(templateKey || 'follow_up')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+
+  const localTemplatePath = path.join(process.cwd(), 'templates', 'email', `${normalized}.md`);
+  const localFallbackPath = path.join(process.cwd(), 'templates', 'email', 'follow_up.md');
+
+  const localTemplate = readIfExists(localTemplatePath) || readIfExists(localFallbackPath);
+  if (localTemplate) {
+    return localTemplate;
+  }
+
   const root = resolveCoreRoot();
-
-  const templatePath = path.join(root, 'templates', 'email', `${normalized}.md`);
-  if (fs.existsSync(templatePath)) {
-    return fs.readFileSync(templatePath, 'utf8');
+  if (!root) {
+    throw new Error(
+      'No templates available. Add templates/email/*.md locally or include prophet-core as submodule.'
+    );
   }
 
-  const fallbackPath = path.join(root, 'templates', 'email', 'follow_up.md');
-  if (fs.existsSync(fallbackPath)) {
-    return fs.readFileSync(fallbackPath, 'utf8');
+  const coreTemplatePath = path.join(root, 'templates', 'email', `${normalized}.md`);
+  const coreFallbackPath = path.join(root, 'templates', 'email', 'follow_up.md');
+
+  const coreTemplate = readIfExists(coreTemplatePath) || readIfExists(coreFallbackPath);
+  if (coreTemplate) {
+    return coreTemplate;
   }
 
-  throw new Error(`No template found for key '${normalized}' and no follow_up fallback in prophet-core.`);
+  throw new Error(`No template found for key '${normalized}' and no follow_up fallback.`);
 }
 
 module.exports = {
