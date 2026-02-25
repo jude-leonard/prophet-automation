@@ -1,0 +1,3 @@
+[submodule "prophet-core"]
+	path = prophet-core
+	url = https://github.com/jude-leonard/prophet-core.git
