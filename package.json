@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "oauth:token": "node scripts/generate-refresh-token.js"
   },
   "keywords": [],
   "author": "",

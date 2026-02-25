@@ -2,27 +2,44 @@ const { google } = require('googleapis');
 
 const SHEETS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
-function getServiceAccountCredentials() {
+function parseServiceAccountCredentials() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_JSON');
+    return null;
   }
 
   try {
     return JSON.parse(raw);
-  } catch (error) {
+  } catch {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON must be valid JSON');
   }
 }
 
-function createSheetsClient() {
-  const creds = getServiceAccountCredentials();
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: SHEETS_SCOPES,
-  });
+function createAuthClient() {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
 
+  if (clientId && clientSecret && refreshToken) {
+    const oauth2 = new google.auth.OAuth2(clientId, clientSecret, process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:3000/oauth2callback');
+    oauth2.setCredentials({ refresh_token: refreshToken });
+    return oauth2;
+  }
+
+  const creds = parseServiceAccountCredentials();
+  if (creds) {
+    return new google.auth.JWT({
+      email: creds.client_email,
+      key: creds.private_key,
+      scopes: SHEETS_SCOPES,
+    });
+  }
+
+  throw new Error('Sheets auth not configured. Use personal OAuth vars or GOOGLE_SERVICE_ACCOUNT_JSON.');
+}
+
+function createSheetsClient() {
+  const auth = createAuthClient();
   return google.sheets({ version: 'v4', auth });
 }
 

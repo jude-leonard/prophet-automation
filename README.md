@@ -31,13 +31,13 @@ git submodule update --init --recursive
 cp .env.example .env
 ```
 
-2. Fill env values.
-
-3. Install dependencies:
+2. Install dependencies:
 
 ```bash
 npm install
 ```
+
+3. Fill `.env` values.
 
 4. Run local dry run:
 
@@ -45,26 +45,57 @@ npm install
 npm run dev
 ```
 
-## Gmail auth modes
+## Personal Gmail OAuth setup (recommended for you)
 
-### Personal Gmail mode
-
-Set these in `.env`:
+1. In Google Cloud Console, create/select a project.
+2. Enable `Gmail API` and `Google Sheets API`.
+3. Configure OAuth consent screen (External is fine), add your Gmail as a test user.
+4. Create OAuth Client ID of type `Web application`.
+5. Add redirect URI: `http://localhost:3000/oauth2callback`.
+6. Put these in `.env`:
 
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REFRESH_TOKEN`
-- `GMAIL_FROM`
+- `GOOGLE_OAUTH_REDIRECT_URI` (default already set)
+- `GMAIL_FROM` (your sender Gmail)
+- `SHEET_ID`
 
-### Google Workspace mode (service account delegation)
+7. Generate refresh token:
+
+```bash
+npm run oauth:token
+```
+
+8. Paste the returned value into `.env` as:
+
+```bash
+GOOGLE_OAUTH_REFRESH_TOKEN=...
+```
+
+9. Set safe mode first:
+
+```bash
+DRY_RUN=true
+```
+
+10. Run:
+
+```bash
+npm start
+```
+
+## Service account mode (optional)
 
 Set these in `.env`:
 
 - `GOOGLE_SERVICE_ACCOUNT_JSON`
-- `GMAIL_IMPERSONATE_USER`
+- `GMAIL_IMPERSONATE_USER` (Workspace only)
 - `GMAIL_FROM`
 
-Service account must have domain-wide delegation and Gmail + Sheets scopes approved by admin.
+## Run modes
+
+- `DRY_RUN=true`: create Gmail drafts only
+- `DRY_RUN=false`: send real emails
 
 ## Deploy to Railway
 
